@@ -40,6 +40,8 @@ class StockRepository {
       params.push(filters.is_perishable);
     }
 
+    const allowedSortFields = ['created_at', 'name', 'current_price_per_unit', 'reorder_level', 'updated_at'];
+    const sortBy = allowedSortFields.includes(filters.sortBy) ? filters.sortBy : 'created_at';
     const sortBy = filters.sortBy || 'created_at';
     query += ` ORDER BY ${sortBy} DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
@@ -56,6 +58,11 @@ class StockRepository {
     if (data.name) {
       updates.push(`name = $${paramCount}`);
       params.push(data.name);
+      paramCount++;
+    }
+    if (data.unit) {
+      updates.push(`unit = $${paramCount}`);
+      params.push(data.unit);
       paramCount++;
     }
     if (data.current_price_per_unit !== undefined) {
@@ -150,6 +157,18 @@ class StockRepository {
       UPDATE current_stock 
       SET available_quantity = $1, last_updated = CURRENT_TIMESTAMP
     `;
+    const params = [availableQty];
+
+    if (reservedQty !== null) {
+      query += `, reserved_quantity = $2`;
+      params.push(reservedQty);
+      query += ` WHERE ingredient_id = $3 RETURNING *`;
+      params.push(ingredientId);
+    } else {
+      query += ` WHERE ingredient_id = $2 RETURNING *`;
+      params.push(ingredientId);
+    }
+
     const params = [availableQty, ingredientId];
     let paramCount = 2;
 
@@ -167,6 +186,77 @@ class StockRepository {
   }
 
   async reserveStock(ingredientId, quantity) {
+    const query = `
+      UPDATE current_stock
+      SET
+        available_quantity = available_quantity - $2,
+        reserved_quantity = reserved_quantity + $2,
+        last_updated = CURRENT_TIMESTAMP
+      WHERE ingredient_id = $1
+        AND available_quantity >= $2
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [ingredientId, quantity]);
+    if (result.rows[0]) {
+      return result.rows[0];
+    }
+
+    const stock = await this.getCurrentStock(ingredientId);
+    if (!stock) {
+      throw new Error('No stock found for ingredient');
+    }
+
+    throw new Error('Insufficient stock available');
+  }
+
+  async consumeStock(ingredientId, quantity) {
+    const query = `
+      UPDATE current_stock
+      SET
+        reserved_quantity = reserved_quantity - $2,
+        last_updated = CURRENT_TIMESTAMP
+      WHERE ingredient_id = $1
+        AND reserved_quantity >= $2
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [ingredientId, quantity]);
+    if (result.rows[0]) {
+      return result.rows[0];
+    }
+
+    const stock = await this.getCurrentStock(ingredientId);
+    if (!stock) {
+      throw new Error('No stock found for ingredient');
+    }
+
+    throw new Error('Insufficient reserved stock');
+  }
+
+  async releaseReservedStock(ingredientId, quantity) {
+    const query = `
+      UPDATE current_stock
+      SET
+        reserved_quantity = reserved_quantity - $2,
+        available_quantity = available_quantity + $2,
+        last_updated = CURRENT_TIMESTAMP
+      WHERE ingredient_id = $1
+        AND reserved_quantity >= $2
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [ingredientId, quantity]);
+    if (result.rows[0]) {
+      return result.rows[0];
+    }
+
+    const stock = await this.getCurrentStock(ingredientId);
+    if (!stock) {
+      throw new Error('No stock found for ingredient');
+    }
+
+    throw new Error('Insufficient reserved stock to release');
     const currentStock = await this.getCurrentStock(ingredientId);
 
     if (!currentStock) {
@@ -211,6 +301,7 @@ class StockRepository {
       SELECT i.*, cs.available_quantity
       FROM ingredients i
       LEFT JOIN current_stock cs ON i.id = cs.ingredient_id
+      WHERE COALESCE(cs.available_quantity, 0) <= i.reorder_level
       WHERE cs.available_quantity <= i.reorder_level
       ORDER BY i.name
     `;
