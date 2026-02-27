@@ -1,0 +1,56 @@
+info: POST /api/v1/auth/register {"ip":"::ffff:127.0.0.1","timestamp":"2026-02-13T16:39:50.981Z"}
+info: POST /api/v1/auth/register {"ip":"::ffff:127.0.0.1","timestamp":"2026-02-13T16:39:51.009Z"}
+error: Error occurred: Email already registered {"method":"POST","path":"/api/v1/auth/register","stack":"Error: Email already registered\n    at Function.conflict (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\shared\\errors\\AppError.js:28:12)\n    at AuthService.conflict (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\modules\\auth\\service.js:10:22)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at register (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\modules\\auth\\controller.js:6:22)","timestamp":"2026-02-13T16:39:51.015Z"}
+info: POST /api/v1/auth/login {"ip":"::ffff:127.0.0.1","timestamp":"2026-02-13T16:39:51.022Z"}
+info: POST /api/v1/auth/login {"ip":"::ffff:127.0.0.1","timestamp":"2026-02-13T16:39:51.034Z"}
+error: Error occurred: Invalid credentials {"method":"POST","path":"/api/v1/auth/login","stack":"Error: Invalid credentials\n    at Function.unauthorized (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\shared\\errors\\AppError.js:16:12)\n    at AuthService.unauthorized [as login] (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\modules\\auth\\service.js:46:22)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at login (E:\\sem 6\\nalas\\nalas_app\\magilam-foods-backend\\src\\modules\\auth\\controller.js:20:22)","timestamp":"2026-02-13T16:39:51.035Z"}
+FAIL src/tests/auth.test.js
+  Auth Endpoints
+    POST /api/v1/auth/register
+      × should create a new user (74 ms)
+      √ should return 409 if user already exists (15 ms)
+    POST /api/v1/auth/login
+      × should login successfully with correct credentials (11 ms)
+      √ should return 401 with incorrect password (7 ms)
+
+  ● Auth Endpoints › POST /api/v1/auth/register › should create a new user
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: 200
+    Received: 201
+
+    [0m [90m 43 |[39m                 })[33m;[39m
+     [90m 44 |[39m
+    [31m[1m>[22m[39m[90m 45 |[39m             expect(res[33m.[39mstatusCode)[33m.[39mtoEqual([35m200[39m)[33m;[39m
+     [90m    |[39m                                    [31m[1m^[22m[39m
+     [90m 46 |[39m             expect(res[33m.[39mbody)[33m.[39mtoHaveProperty([32m'token'[39m)[33m;[39m
+     [90m 47 |[39m             expect(res[33m.[39mbody[33m.[39muser)[33m.[39mtoHaveProperty([32m'email'[39m[33m,[39m [32m'test@example.com'[39m)[33m;[39m
+     [90m 48 |[39m         })[33m;[39m[0m
+
+      at Object.toEqual (src/tests/auth.test.js:45:36)
+
+  ● Auth Endpoints › POST /api/v1/auth/login › should login successfully with correct credentials
+
+    expect(received).toHaveProperty(path)
+
+    Expected path: "token"
+    Received path: []
+
+    Received value: {"data": {"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInJvbGUiOiJjdXN0b21lciIsImlhdCI6MTc3MTAwMDc5MSwiZXhwIjoxNzcxMDg3MTkxfQ.6uBhmjZgyra-t4x_-znEQjqEupMLWyRE2rTrcdIhVe0", "user": {"email": "test@example.com", "id": 1, "role": "customer"}}, "message": "Login successful", "success": true}
+
+    [0m [90m 91 |[39m
+     [90m 92 |[39m             expect(res[33m.[39mstatusCode)[33m.[39mtoEqual([35m200[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 93 |[39m             expect(res[33m.[39mbody)[33m.[39mtoHaveProperty([32m'token'[39m)[33m;[39m
+     [90m    |[39m                              [31m[1m^[22m[39m
+     [90m 94 |[39m         })[33m;[39m
+     [90m 95 |[39m
+     [90m 96 |[39m         it([32m'should return 401 with incorrect password'[39m[33m,[39m [36masync[39m () [33m=>[39m {[0m
+
+      at Object.toHaveProperty (src/tests/auth.test.js:93:30)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 passed, 4 total
+Snapshots:   0 total
+Time:        1.398 s, estimated 2 s
+Ran all test suites matching /src\\tests\\auth.test.js/i.
