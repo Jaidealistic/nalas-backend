@@ -8,6 +8,8 @@ const {
   updateIngredientSchema,
   createTransactionSchema,
   reserveStockSchema,
+  querySchema,
+  procurementAlertsQuerySchema
   querySchema
 } = require('./validators');
 
@@ -92,6 +94,7 @@ router.get(
   '/alerts/procurement',
   authenticate,
   requireRole('admin', 'super_admin'),
+  validate(procurementAlertsQuerySchema, 'query'),
   stockController.getProcurementAlerts
 );
 

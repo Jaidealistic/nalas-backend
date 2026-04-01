@@ -70,11 +70,50 @@ class OrderController {
 
   async updateStatus(req, res, next) {
     try {
+      const result = await orderService.updateOrderStatus(
+        req.params.id,
+        req.body.status,
+        req.user?.id || null
+      );
       const result = await orderService.updateOrderStatus(req.params.id, req.body.status);
 
       res.json({
         success: true,
         message: 'Order status updated successfully',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async generateQuotation(req, res, next) {
+    try {
+      const result = await orderService.generateQuotation(
+        req.params.id,
+        req.user?.id || null
+      );
+
+      res.json({
+        success: true,
+        message: 'Quotation generated successfully',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async confirmOrder(req, res, next) {
+    try {
+      const result = await orderService.confirmOrder(
+        req.params.id,
+        req.user?.id || null
+      );
+
+      res.json({
+        success: true,
+        message: 'Order confirmed successfully',
         data: result
       });
     } catch (error) {
