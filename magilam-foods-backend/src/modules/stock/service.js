@@ -253,6 +253,8 @@ class StockService {
       critical,
       low
     };
+  }
+
   async getProcurementAlerts() {
     const alerts = await stockRepository.getProcurementAlerts();
 
@@ -299,7 +301,7 @@ class StockService {
     }
 
     try {
-      const updated = await stockRepository.releaseReservedStock(ingredientId, quantity);
+      await stockRepository.releaseReservedStock(ingredientId, quantity);
       const updated = await stockRepository.consumeStock(ingredientId, quantity);
 
       return {
