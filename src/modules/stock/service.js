@@ -132,19 +132,7 @@ class StockService {
       }
       newAvailableQty -= quantity;
     } else if (data.transaction_type === 'adjustment') {
-      newAvailableQty = quantity; // Set to exact quantity
-    let newAvailableQty = currentStock.available_quantity;
-
-    // Update stock based on transaction type
-    if (data.transaction_type === 'purchase') {
-      newAvailableQty += data.quantity;
-    } else if (data.transaction_type === 'consumption' || data.transaction_type === 'wastage') {
-      if (currentStock.available_quantity < data.quantity) {
-        throw AppError.badRequest('Insufficient stock for this transaction');
-      }
-      newAvailableQty -= data.quantity;
-    } else if (data.transaction_type === 'adjustment') {
-      newAvailableQty = data.quantity; // Set to exact quantity
+      newAvailableQty = quantity;
     }
 
     // Create transaction record
@@ -218,9 +206,9 @@ class StockService {
       ingredient_name: s.name,
       unit: s.unit,
       price_per_unit: s.current_price_per_unit,
-      available_quantity: s.available_quantity,
-      reserved_quantity: s.reserved_quantity,
-      usable_quantity: s.available_quantity - s.reserved_quantity
+      available_quantity: Number(s.available_quantity),
+      reserved_quantity: Number(s.reserved_quantity),
+      usable_quantity: Number(s.available_quantity) - Number(s.reserved_quantity)
     }));
   }
 
@@ -258,17 +246,6 @@ class StockService {
       critical,
       low
     };
-  async getProcurementAlerts() {
-    const alerts = await stockRepository.getProcurementAlerts();
-
-    return alerts.map(a => ({
-      ingredient_id: a.id,
-      ingredient_name: a.name,
-      current_level: a.available_quantity || 0,
-      reorder_level: a.reorder_level,
-      unit: a.unit,
-      status: (a.available_quantity || 0) <= (a.reorder_level || 0) ? 'LOW' : 'CRITICAL'
-    }));
   }
 
   // ===== STOCK RESERVATION (for orders) =====
@@ -305,7 +282,6 @@ class StockService {
 
     try {
       const updated = await stockRepository.releaseReservedStock(ingredientId, quantity);
-      const updated = await stockRepository.consumeStock(ingredientId, quantity);
 
       return {
         ingredient_id: ingredientId,

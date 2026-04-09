@@ -8,8 +8,7 @@ const {
   updateIngredientSchema,
   createTransactionSchema,
   reserveStockSchema,
-  querySchema,
-  procurementAlertsQuerySchema
+  procurementAlertsQuerySchema,
   querySchema
 } = require('./validators');
 
