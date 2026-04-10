@@ -10,11 +10,19 @@ const orderRepository = require('../../../src/modules/orders/repository');
 const menuRepository = require('../../../src/modules/menu/repository');
 const billingRepository = require('../../../src/modules/billing/repository');
 const stockRepository = require('../../../src/modules/stock/repository');
+const { pool } = require('../../../src/config/database');
 
 jest.mock('../../../src/modules/orders/repository');
 jest.mock('../../../src/modules/menu/repository');
 jest.mock('../../../src/modules/billing/repository');
 jest.mock('../../../src/modules/stock/repository');
+jest.mock('../../../src/config/database');
+
+// Mock for the transaction client
+const mockClient = {
+  query: jest.fn(),
+  release: jest.fn()
+};
 
 describe('Orders and Integration Module API', () => {
   beforeEach(() => {
@@ -93,6 +101,15 @@ describe('Orders and Integration Module API', () => {
       billingRepository.createInvoice.mockResolvedValue({ id: 'inv1', invoice_number: 'INV-123', total_amount: 1000 });
       orderRepository.updateOrderStatus.mockResolvedValue({ id: '123', status: 'confirmed' });
 
+      // Setup Database Pool Mock
+      pool.connect.mockResolvedValue(mockClient);
+      mockClient.query.mockImplementation((sql) => {
+        if (sql.includes('SELECT * FROM orders WHERE id = $1 FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ id: '123', status: 'quoted' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
       const response = await request(app)
         .post('/api/v1/orders/123/confirm')
         .set('Authorization', 'Bearer fake_token')
@@ -100,6 +117,9 @@ describe('Orders and Integration Module API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 });
