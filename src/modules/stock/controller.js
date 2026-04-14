@@ -142,15 +142,13 @@ class StockController {
 
   async getProcurementAlerts(req, res, next) {
     try {
-      const result = await stockService.getProcurementAlerts(req.query);
-      const summary = stockService.getProcurementAlertsSummary(result);
+      const result = await stockService.getProcurementAlerts();
 
       res.json({
         success: true,
         message: 'Procurement alerts retrieved successfully',
         data: result,
-        count: result.length,
-        summary
+        count: result.length
       });
     } catch (error) {
       next(error);
