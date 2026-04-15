@@ -12,6 +12,5 @@ module.exports = {
     'src/modules/**/*.js',
     '!src/modules/**/validators.js',
     '!src/modules/**/routes.js'
-  ],
-  setupFilesAfterEnv: ['<rootDir>/src/tests/setup.js']
+  ]
 };
