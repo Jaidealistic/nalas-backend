@@ -56,9 +56,9 @@ class AuthRepository {
     await db.query(query, [token]);
   }
 
-  async blacklistToken(token, expiresAt) {
-    const query = 'INSERT INTO blacklisted_tokens (token, expires_at) VALUES ($1, $2)';
-    await db.query(query, [token, expiresAt]);
+  async blacklistToken(userId, token, expiresAt) {
+    const query = 'INSERT INTO blacklisted_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)';
+    await db.query(query, [userId, token, expiresAt]);
   }
 
   async isTokenBlacklisted(token) {

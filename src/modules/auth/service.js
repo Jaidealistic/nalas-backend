@@ -64,12 +64,14 @@ class AuthService {
   }
 
   async logout(token) {
-    // Decode token to get expiry
+    // Decode token to get expiry and userId
     const decoded = jwt.decode(token);
     if (!decoded) return;
 
     const expiresAt = new Date(decoded.exp * 1000);
-    await authRepository.blacklistToken(token, expiresAt);
+    const userId = decoded.userId;
+    
+    await authRepository.blacklistToken(userId, token, expiresAt);
   }
 
   async refreshToken(oldRefreshToken) {
