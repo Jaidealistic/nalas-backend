@@ -66,10 +66,17 @@ async function run() {
       const parsedPrice = parseFloat(price) || 0;
       
       const res = await client.query(`
-        INSERT INTO ingredients (name, category, unit, current_price_per_unit)
-        VALUES ($1, $2, $3, $4) RETURNING id
-      `, [name, cat, unit || 'kg', parsedPrice]);
-      ingIdMap[old_id] = res.rows[0].id;
+        INSERT INTO ingredients (name, unit, current_price_per_unit)
+        VALUES ($1, $2, $3) RETURNING id
+      `, [name, unit || 'kg', parsedPrice]);
+      const newIngId = res.rows[0].id;
+      ingIdMap[old_id] = newIngId;
+
+      // Initialize Current Stock to 100 for testing/production start
+      await client.query(`
+        INSERT INTO current_stock (ingredient_id, available_quantity, reserved_quantity)
+        VALUES ($1, $2, $3)
+      `, [newIngId, 100.00, 0.00]);
     }
 
     // 2. Menu Items

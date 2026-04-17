@@ -8,60 +8,6 @@ const mlCostingRepository = require('../ml-costing/repository');
 const logger = require('../../shared/utils/logger');
 const mlClient = require('../../shared/utils/mlClient');
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
-
-/**
- * Attempt cost prediction via ML service, fall back to recipe-based calculation.
- * @param {string} menuItemId
- * @param {number} quantity
- * @param {string} eventDate  ISO date string
- * @param {number} guestCount
- * @returns {{ cost: number, source: 'ml'|'recipe'|'fallback', confidence: number|null }}
- */
-async function predictItemCost(menuItemId, quantity, eventDate, guestCount) {
-  // 1. Try ML service first
-  try {
-    const { data } = await axios.post(
-      `${ML_SERVICE_URL}/ml/predict-cost`,
-      {
-        menuItemId: menuItemId,
-        quantity: Math.round(quantity),
-        eventDate: eventDate || new Date().toISOString().slice(0, 10),
-        guestCount: guestCount || 100,
-      },
-      { timeout: 3000 }   // 3s timeout — don't block order flow
-    );
-    if (data && data.totalCost != null) {
-      logger.info(`ML prediction for ${menuItemId}: Rs.${data.totalCost} (confidence: ${data.confidence}, method: ${data.method})`);
-      return { cost: data.totalCost, source: data.method === 'ml_model' ? 'ml' : 'rule_based', confidence: data.confidence };
-    }
-  } catch (mlErr) {
-    // ML service down or item not found — log and fall through to recipe-based
-    logger.warn(`ML service unavailable for ${menuItemId}: ${mlErr.message} — falling back to recipe`);
-  }
-
-  // 2. Recipe-based calculation
-  try {
-    const recipe = await menuRepository.getRecipe(menuItemId);
-    if (recipe && recipe.length > 0) {
-      const cost = recipe.reduce((total, r) => {
-        return total + (
-          r.quantity_per_base_unit *
-          (r.wastage_factor || 1.0) *
-          r.current_price_per_unit *
-          quantity
-        );
-      }, 0);
-      return { cost, source: 'recipe', confidence: null };
-    }
-  } catch (recipeErr) {
-    logger.error(`Recipe calculation failed for ${menuItemId}:`, recipeErr.message);
-  }
-
-  // 3. Last resort: unit_price markup
-  return { cost: null, source: 'fallback', confidence: null };
-}
-
 class OrderService {
   async createOrder(customerId, orderData) {
     // Validate order items exist and retrieve menu items
@@ -156,38 +102,35 @@ class OrderService {
     const eventDate = order.event_date ? new Date(order.event_date).toISOString().slice(0, 10) : null;
 
     for (const item of orderItems) {
-      const { cost, source, confidence } = await predictItemCost(
-        item.menu_item_id,
-        item.quantity,
-        eventDate,
-        order.guest_count
-      );
-
       let itemCost;
       let usedMl = false;
+      let predictionData = null;
 
       try {
         // 1. Attempt ML-based cost prediction (FastAPI Service)
-        const prediction = await mlClient.predictCost({
+        predictionData = await mlClient.predictCost({
           menuItemId: item.menu_item_id,
           quantity: item.quantity,
           eventDate: order.event_date,
           guestCount: order.guest_count
         });
 
-        if (prediction && prediction.totalCost) {
-          itemCost = prediction.totalCost;
+        if (predictionData && predictionData.totalCost) {
+          itemCost = predictionData.totalCost;
           usedMl = true;
+          isMlPredicted = true;
+          mlCount++;
+          mlConfidenceSum += (predictionData.confidence || 0);
 
-          // Mugil's Task: Log prediction results to the database for evaluation
+          // Log prediction results to the database for evaluation
           await mlCostingRepository.createPrediction({
             order_item_id: item.id,
-            ingredient_cost: prediction.ingredientCost,
-            labor_cost: prediction.laborCost,
-            overhead_cost: prediction.overheadCost,
-            predicted_total: prediction.totalCost,
-            model_version: prediction.modelVersion,
-            prediction_confidence: prediction.confidence
+            ingredient_cost: predictionData.ingredientCost,
+            labor_cost: predictionData.laborCost,
+            overhead_cost: predictionData.overheadCost,
+            predicted_total: predictionData.totalCost,
+            model_version: predictionData.modelVersion,
+            prediction_confidence: predictionData.confidence
           });
         }
       } catch (err) {
@@ -196,7 +139,6 @@ class OrderService {
 
       // 2. Fallback: Recipe-based calculation
       if (!usedMl) {
-        isMlPredicted = false;
         try {
           const recipe = await menuRepository.getRecipe(item.menu_item_id);
 
@@ -225,7 +167,7 @@ class OrderService {
         name: item.name,
         quantity: item.quantity,
         calculated_cost: itemCost,
-        method: usedMl ? 'ml_prediction' : 'recipe_calculation'
+        method: usedMl ? (predictionData.method === 'ml_model' ? 'ml_prediction' : 'rule_based') : 'recipe_calculation'
       });
     }
 

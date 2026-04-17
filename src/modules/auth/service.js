@@ -105,12 +105,16 @@ class AuthService {
 
     await authRepository.setUserResetToken(user.id, resetToken, expires);
 
-    // Production-ready TODO: Send real email
-    // For now, console log for demo
-    console.log('\n===== PASSWORD RESET EMAIL =====');
-    console.log(`To: ${email}`);
-    console.log(`Link: http://localhost:5173/reset-password?token=${resetToken}`);
-    console.log('=================================\n');
+    // 1. Load email client
+    const emailClient = require('../../shared/utils/emailClient');
+    
+    // 2. Send real email
+    try {
+      await emailClient.sendPasswordReset(email, resetToken);
+    } catch (err) {
+      // We still return success to the user, but log the error
+      logger.error('Background Email Job Failed:', err.message);
+    }
   }
 
   async resetPassword(token, newPassword) {

@@ -2,6 +2,7 @@ const axios = require('axios');
 const logger = require('./logger');
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
+const ML_API_KEY = process.env.ML_API_KEY || 'nalas-ml-secret-2026';
 
 class MLClient {
   constructor() {
@@ -9,7 +10,8 @@ class MLClient {
       baseURL: ML_SERVICE_URL,
       timeout: 5000,
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-API-Key': ML_API_KEY
       }
     });
   }
