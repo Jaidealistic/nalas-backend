@@ -171,20 +171,24 @@ class StockRepository {
   }
 
   async reserveStock(ingredientId, quantity) {
-    const currentStock = await this.getCurrentStock(ingredientId);
-
-    if (!currentStock) {
-      throw new Error('No stock found for ingredient');
-    }
-
-    if (currentStock.available_quantity < quantity) {
+    const query = `
+      UPDATE current_stock 
+      SET available_quantity = available_quantity - $1,
+          reserved_quantity = reserved_quantity + $1,
+          last_updated = CURRENT_TIMESTAMP
+      WHERE ingredient_id = $2 AND available_quantity >= $1
+      RETURNING *
+    `;
+    const result = await db.query(query, [quantity, ingredientId]);
+    
+    if (result.rows.length === 0) {
+      // Check if it failed because there's no record or insufficient stock
+      const stock = await this.getCurrentStock(ingredientId);
+      if (!stock) throw new Error('No stock found for ingredient');
       throw new Error('Insufficient stock available');
     }
-
-    const newReserved = currentStock.reserved_quantity + quantity;
-    const newAvailable = currentStock.available_quantity - quantity;
-
-    return this.updateCurrentStock(ingredientId, newAvailable, newReserved);
+    
+    return result.rows[0];
   }
 
   async consumeStock(ingredientId, quantity) {
@@ -199,16 +203,21 @@ class StockRepository {
   }
 
   async releaseReservedStock(ingredientId, quantity) {
-    const currentStock = await this.getCurrentStock(ingredientId);
-
-    if (!currentStock) {
+    const query = `
+      UPDATE current_stock 
+      SET available_quantity = available_quantity + $1,
+          reserved_quantity = GREATEST(0, reserved_quantity - $1),
+          last_updated = CURRENT_TIMESTAMP
+      WHERE ingredient_id = $2
+      RETURNING *
+    `;
+    const result = await db.query(query, [quantity, ingredientId]);
+    
+    if (result.rows.length === 0) {
       throw new Error('No stock found for ingredient');
     }
-
-    const newReserved = Math.max(0, currentStock.reserved_quantity - quantity);
-    const newAvailable = currentStock.available_quantity + quantity;
-
-    return this.updateCurrentStock(ingredientId, newAvailable, newReserved);
+    
+    return result.rows[0];
   }
 
   async getAllCurrentStock(limit = 100, offset = 0) {
