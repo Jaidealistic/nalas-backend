@@ -120,14 +120,14 @@ class StockService {
       throw AppError.internal('Stock not initialized for ingredient');
     }
 
-    let newAvailableQty = currentStock.available_quantity;
-    const quantity = data.quantity;
+    let newAvailableQty = Number(currentStock.available_quantity);
+    const quantity = Number(data.quantity);
 
     // Update stock based on transaction type
     if (data.transaction_type === 'purchase') {
       newAvailableQty += quantity;
     } else if (data.transaction_type === 'consumption' || data.transaction_type === 'wastage') {
-      if (currentStock.available_quantity < quantity) {
+      if (Number(currentStock.available_quantity) < quantity) {
         throw AppError.badRequest('Insufficient stock for this transaction');
       }
       newAvailableQty -= quantity;

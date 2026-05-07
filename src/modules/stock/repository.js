@@ -151,12 +151,10 @@ class StockRepository {
       UPDATE current_stock 
       SET available_quantity = $1, last_updated = CURRENT_TIMESTAMP
     `;
-    const params = [availableQty, ingredientId];
-    let paramCount = 2;
+    const params = [availableQty];
+    let paramCount = 1;
 
     if (reservedQty !== null) {
-      query += `, reserved_quantity = $${paramCount + 1}`;
-      params.splice(paramCount, 0, reservedQty);
       paramCount++;
       query += `, reserved_quantity = $${paramCount}`;
       params.push(reservedQty);
