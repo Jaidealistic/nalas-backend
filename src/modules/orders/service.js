@@ -28,6 +28,18 @@ class OrderService {
     const orderItems = [];
 
     for (const item of orderData.order_items) {
+      // Validate against minimum quantity
+      const menuItem = await menuRepository.findMenuItemById(item.menu_item_id);
+      if (!menuItem) {
+        throw AppError.notFound(`Menu item not found: ${item.menu_item_id}`);
+      }
+
+      if (item.quantity < menuItem.min_quantity) {
+        throw AppError.badRequest(
+          `Minimum quantity for ${menuItem.name} is ${menuItem.min_quantity}. You requested ${item.quantity}.`
+        );
+      }
+
       // Note: In production, you'd fetch menu item price here
       // For now, we accept unit_price in the request (to be removed later)
       const unitPrice = item.unit_price || 500; // Default placeholder
