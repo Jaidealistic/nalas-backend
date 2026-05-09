@@ -102,7 +102,14 @@ class StockService {
       throw AppError.notFound('Ingredient');
     }
 
-    await stockRepository.deleteIngredient(ingredientId);
+    try {
+      await stockRepository.deleteIngredient(ingredientId);
+    } catch (error) {
+      if (error.code === '23503') { // Postgres foreign key violation
+        throw AppError.badRequest('Cannot delete ingredient because it is currently used in recipes, stock transactions, or active orders. Please remove it from these areas first.');
+      }
+      throw AppError.internal('Failed to delete ingredient');
+    }
 
     return { message: 'Ingredient deleted successfully' };
   }

@@ -91,9 +91,25 @@ class StockRepository {
   }
 
   async deleteIngredient(id) {
-    const query = 'DELETE FROM ingredients WHERE id = $1 RETURNING *';
-    const result = await db.query(query, [id]);
-    return result.rows[0];
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      
+      // Delete from current_stock first (since it has a FK without CASCADE)
+      await client.query('DELETE FROM current_stock WHERE ingredient_id = $1', [id]);
+      
+      // Delete the ingredient
+      const query = 'DELETE FROM ingredients WHERE id = $1 RETURNING *';
+      const result = await client.query(query, [id]);
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   // ===== STOCK TRANSACTIONS =====
