@@ -13,7 +13,7 @@ const createOrderSchema = Joi.object({
       quantity: Joi.number().min(0.5).required(),
       customizations: Joi.object().default({})
     })
-  ).min(1).required()
+  ).min(1).max(100).required()
 });
 
 const updateOrderSchema = Joi.object({
@@ -29,7 +29,7 @@ const updateOrderSchema = Joi.object({
       quantity: Joi.number().min(0.5).required(),
       customizations: Joi.object().default({})
     })
-  ).min(1)
+  ).min(1).max(100)
 });
 
 const updateStatusSchema = Joi.object({
