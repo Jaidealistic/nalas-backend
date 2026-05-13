@@ -481,6 +481,26 @@ class OrderService {
     }
 
     // ===== SIDE EFFECTS =====
+    
+    // Completion of order: consume reserved stock
+    if (newStatus === 'completed' && order.status === 'preparing') {
+      try {
+        const reservations = await orderRepository.getStockReservations(orderId);
+        for (const reservation of reservations) {
+          try {
+            await stockService.consumeReservedStock(
+              reservation.ingredient_id,
+              Number(reservation.reserved_quantity)
+            );
+          } catch (consumeError) {
+            logger.error(`Failed to consume reserved stock for ingredient ${reservation.ingredient_id} on order ${orderId}:`, consumeError.message);
+          }
+        }
+        await orderRepository.deleteStockReservations(orderId);
+      } catch (err) {
+        logger.error(`Stock consumption failed during completion of order ${orderId}:`, err.message);
+      }
+    }
 
     // Cancellation of confirmed/preparing orders: release reserved stock
     if (newStatus === 'cancelled' && ['confirmed', 'preparing'].includes(order.status)) {

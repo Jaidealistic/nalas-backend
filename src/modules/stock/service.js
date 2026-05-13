@@ -301,6 +301,27 @@ class StockService {
       throw AppError.internal(error.message);
     }
   }
+
+  async consumeReservedStock(ingredientId, quantity) {
+    const ingredient = await stockRepository.findIngredientById(ingredientId);
+
+    if (!ingredient) {
+      throw AppError.notFound('Ingredient');
+    }
+
+    try {
+      const updated = await stockRepository.consumeStock(ingredientId, quantity);
+
+      return {
+        ingredient_id: ingredientId,
+        ingredient_name: ingredient.name,
+        reserved_quantity: updated.reserved_quantity,
+        available_quantity: updated.available_quantity
+      };
+    } catch (error) {
+      throw AppError.internal(error.message);
+    }
+  }
 }
 
 module.exports = new StockService();
