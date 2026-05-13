@@ -232,8 +232,7 @@ class BillingService {
 
     // Update invoice paid amount
     const totalPaid = await billingRepository.getTotalPaidAmount(data.invoice_id);
-    const newPaidAmount = totalPaid + data.amount;
-    const updatedInvoice = await billingRepository.updateInvoicePaidAmount(data.invoice_id, newPaidAmount);
+    const updatedInvoice = await billingRepository.updateInvoicePaidAmount(data.invoice_id, Number(totalPaid));
 
     return {
       id: payment.id,
@@ -242,8 +241,8 @@ class BillingService {
       payment_method: payment.payment_method,
       transaction_id: payment.transaction_id,
       invoice_status: updatedInvoice.payment_status,
-      total_paid: newPaidAmount,
-      pending_amount: Math.max(0, invoice.total_amount - newPaidAmount),
+      total_paid: Number(totalPaid),
+      pending_amount: Math.max(0, invoice.total_amount - Number(totalPaid)),
       payment_date: payment.payment_date
     };
   }
@@ -298,10 +297,10 @@ class BillingService {
     });
 
     // Update invoice paid amount
-    const newPaidAmount = Math.max(0, paidAmount - refundAmount);
+    const totalPaid = await billingRepository.getTotalPaidAmount(data.invoice_id);
     const updatedInvoice = await billingRepository.updateInvoicePaidAmount(
       data.invoice_id,
-      newPaidAmount
+      Number(totalPaid)
     );
 
     logger.info(`Refund of ${refundAmount} processed for invoice ${data.invoice_id} by user ${userId}`);
@@ -312,7 +311,7 @@ class BillingService {
       refund_amount: refundAmount,
       reason: data.reason || 'Order cancellation',
       invoice_status: updatedInvoice.payment_status,
-      remaining_paid: newPaidAmount,
+      remaining_paid: Number(totalPaid),
       refunded_at: refund.payment_date
     };
   }
