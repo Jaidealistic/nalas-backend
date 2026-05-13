@@ -23,10 +23,20 @@ class MLClient {
    */
   async predictCost(data) {
     try {
+      // Ensure eventDate is exactly YYYY-MM-DD
+      let formattedDate = new Date().toISOString().slice(0, 10);
+      if (data.eventDate) {
+        try {
+          formattedDate = new Date(data.eventDate).toISOString().slice(0, 10);
+        } catch (e) {
+          // fallback to today if invalid
+        }
+      }
+
       const response = await this.client.post('/ml/predict-cost', {
         menuItemId: data.menuItemId,
         quantity: data.quantity,
-        eventDate: data.eventDate || new Date().toISOString(),
+        eventDate: formattedDate,
         guestCount: data.guestCount || 100
       });
 
