@@ -35,9 +35,9 @@ class MLClient {
 
       const response = await this.client.post('/ml/predict-cost', {
         menuItemId: data.menuItemId,
-        quantity: data.quantity,
+        quantity: Math.ceil(Number(data.quantity)),
         eventDate: formattedDate,
-        guestCount: data.guestCount || 100
+        guestCount: Math.ceil(Number(data.guestCount || 100))
       });
 
       return response.data;
