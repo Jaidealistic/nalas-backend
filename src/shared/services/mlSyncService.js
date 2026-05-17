@@ -12,7 +12,7 @@
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
-const db = require('../../database/connection');
+const db = require('../../config/database');
 const logger = require('../utils/logger');
 
 // Path to the ML Engine's structured data directory
