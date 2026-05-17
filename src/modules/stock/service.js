@@ -197,9 +197,10 @@ class StockService {
       ingredient_id: ingredientId,
       ingredient_name: ingredient.name,
       unit: ingredient.unit,
+      total_quantity: (currentStock?.available_quantity || 0) + (currentStock?.reserved_quantity || 0),
       available_quantity: currentStock?.available_quantity || 0,
       reserved_quantity: currentStock?.reserved_quantity || 0,
-      usable_quantity: (currentStock?.available_quantity || 0) - (currentStock?.reserved_quantity || 0),
+      usable_quantity: currentStock?.available_quantity || 0,
       last_updated: currentStock?.last_updated
     };
   }
@@ -213,9 +214,10 @@ class StockService {
       ingredient_name: s.name,
       unit: s.unit,
       price_per_unit: s.current_price_per_unit,
+      total_quantity: Number(s.available_quantity) + Number(s.reserved_quantity),
       available_quantity: Number(s.available_quantity),
       reserved_quantity: Number(s.reserved_quantity),
-      usable_quantity: Number(s.available_quantity) - Number(s.reserved_quantity)
+      usable_quantity: Number(s.available_quantity)
     }));
   }
 
