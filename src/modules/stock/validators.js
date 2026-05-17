@@ -24,7 +24,7 @@ const updateIngredientSchema = Joi.object({
 const createTransactionSchema = Joi.object({
   ingredient_id: Joi.string().uuid().required(),
   transaction_type: Joi.string().valid('purchase', 'consumption', 'wastage', 'adjustment').required(),
-  quantity: Joi.number().required(),
+  quantity: Joi.number().min(0).required(),
   unit_price: Joi.number().min(0),
   reference_id: Joi.string(),
   notes: Joi.string().max(500)

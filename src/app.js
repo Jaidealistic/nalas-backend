@@ -4,6 +4,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { errorMiddleware } = require('./middlewares/error.middleware');
 const logger = require('./shared/utils/logger');
+const { startMlSyncScheduler } = require('./shared/services/mlSyncService');
 require('dotenv').config();
 
 const app = express();
@@ -80,6 +81,8 @@ const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
+    // Start the nightly ML data sync scheduler
+    startMlSyncScheduler();
   });
 }
 
