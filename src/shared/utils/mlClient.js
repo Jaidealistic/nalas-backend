@@ -21,7 +21,7 @@ class MLClient {
    * @param {Object} data { menuItemId, quantity, eventDate, guestCount }
    * @returns {Promise<Object>} Cost breakdown and metadata
    */
-  async predictCost(data) {
+  async predictCost(data, isRetry = false) {
     try {
       // Ensure eventDate is exactly YYYY-MM-DD
       let formattedDate = new Date().toISOString().slice(0, 10);
@@ -42,6 +42,13 @@ class MLClient {
 
       return response.data;
     } catch (error) {
+      // Retry once on 429 (Render free tier rate limiting)
+      if (error.response?.status === 429 && !isRetry) {
+        logger.warn('ML service rate limited (429). Retrying in 3 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return this.predictCost(data, true);
+      }
+
       logger.error('ML Prediction Error:', {
         message: error.message,
         status: error.response?.status,
