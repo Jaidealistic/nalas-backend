@@ -110,6 +110,7 @@ class OrderService {
     let mlConfidenceSum = 0;
     let mlCount = 0;
     const itemBreakdown = [];
+    let mlFallbackReason = null;
 
     const eventDate = order.event_date ? new Date(order.event_date).toISOString().slice(0, 10) : null;
 
@@ -144,9 +145,18 @@ class OrderService {
             model_version: predictionData.modelVersion,
             prediction_confidence: predictionData.confidence
           });
+        } else if (predictionData) {
+          // ML responded but totalCost was 0 or null
+          mlFallbackReason = `ML returned totalCost=${predictionData.totalCost} (falsy) — ingredient prices may be 0 in the database`;
+          logger.warn(`ML returned zero/null cost for item ${item.menu_item_id}:`, predictionData);
         }
       } catch (err) {
-        logger.warn(`ML service unavailable for item ${item.menu_item_id}, falling back to recipe.`, err.message);
+        const status = err.response?.status;
+        const body = err.response?.data ? JSON.stringify(err.response.data) : null;
+        mlFallbackReason = status
+          ? `ML service returned HTTP ${status}: ${body || err.message}`
+          : `ML service unreachable: ${err.message}`;
+        logger.warn(`ML service failed for item ${item.menu_item_id}: ${mlFallbackReason}`);
       }
 
       // 2. Fallback: Recipe-based calculation
@@ -215,6 +225,7 @@ class OrderService {
       item_breakdown: itemBreakdown,
       is_ml_predicted: isMlPredicted,
       ml_confidence: avgConfidence ? parseFloat(avgConfidence) : null,
+      ml_fallback_reason: isMlPredicted ? null : (mlFallbackReason || 'ML prediction succeeded but was not used'),
       status: updatedOrder.status
     };
   }
