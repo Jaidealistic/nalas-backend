@@ -8,7 +8,7 @@ class MLClient {
   constructor() {
     this.client = axios.create({
       baseURL: ML_SERVICE_URL,
-      timeout: 30000, // 30 seconds to allow Render Free Tier cold start
+      timeout: 60000, // 60 seconds to handle Render Free Tier cold start on predict
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': ML_API_KEY
