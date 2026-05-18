@@ -41,7 +41,11 @@ class BillingService {
     }
 
     // Calculate ingredient cost
-    const ingredientCost = await this.calculateIngredientCost(data.order_id);
+    // If ML predicted the cost, use that directly so the billing reflects ML output.
+    // Otherwise fall back to recipe-based calculation from the database.
+    const ingredientCost = (data.ml_ingredient_cost != null)
+      ? data.ml_ingredient_cost
+      : await this.calculateIngredientCost(data.order_id);
 
     // Calculate labour cost
     const laborCost = order.guest_count * (data.labor_cost_per_guest || 500);

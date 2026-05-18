@@ -196,11 +196,14 @@ class OrderService {
     const avgConfidence = mlCount > 0 ? (mlConfidenceSum / mlCount).toFixed(2) : null;
 
     // Create quotation via billing service
+    // If ML was used, pass the ML-computed ingredient cost directly so the
+    // grand total is actually driven by ML prediction (not re-derived from recipes)
     const quotation = await billingService.createQuotation({
       order_id: orderId,
       labor_cost_per_guest: 500,
       overhead_percentage: 10,
-      tax_percentage: 5
+      tax_percentage: 5,
+      ...(isMlPredicted && { ml_ingredient_cost: subtotal })
     });
 
     // Update order status to 'quoted'
