@@ -16,6 +16,9 @@ app.use(cors({
   credentials: true
 }));
 
+// Trust Render's proxy (required on all cloud platforms with load balancers)
+app.set('trust proxy', 1);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
