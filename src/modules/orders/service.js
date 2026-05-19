@@ -104,7 +104,8 @@ class OrderService {
       throw AppError.badRequest('Order has no items');
     }
 
-    // Calculate costs per item — ML service first, recipe fallback, then unit_price markup
+    // Calculate costs per item — Recipe-based first (deterministic, auditable).
+    // ML prediction is only used as a last resort when an item has no recipe mapped.
     let subtotal = 0;
     let isMlPredicted = false;
     let mlConfidenceSum = 0;
@@ -112,75 +113,80 @@ class OrderService {
     const itemBreakdown = [];
     let mlFallbackReason = null;
 
-    const eventDate = order.event_date ? new Date(order.event_date).toISOString().slice(0, 10) : null;
-
     for (const item of orderItems) {
       let itemCost;
       let usedMl = false;
       let predictionData = null;
+      let method = 'recipe_calculation';
 
+      // 1. PRIMARY: Recipe-based calculation (deterministic, auditable, legally defensible)
       try {
-        // 1. Attempt ML-based cost prediction (FastAPI Service)
-        predictionData = await mlClient.predictCost({
-          menuItemId: item.menu_item_id,
-          quantity: item.quantity,
-          eventDate: order.event_date,
-          guestCount: order.guest_count
-        });
+        const recipe = await menuRepository.getRecipe(item.menu_item_id);
 
-        if (predictionData && predictionData.totalCost) {
-          itemCost = predictionData.totalCost;
-          usedMl = true;
-          isMlPredicted = true;
-          mlCount++;
-          mlConfidenceSum += (predictionData.confidence || 0);
-
-          // Log prediction results to the database for evaluation
-          await mlCostingRepository.createPrediction({
-            order_item_id: item.id,
-            ingredient_cost: predictionData.ingredientCost,
-            labor_cost: predictionData.laborCost,
-            overhead_cost: predictionData.overheadCost,
-            predicted_total: predictionData.totalCost,
-            model_version: predictionData.modelVersion,
-            prediction_confidence: predictionData.confidence
-          });
-        } else if (predictionData) {
-          // ML responded but totalCost was 0 or null
-          mlFallbackReason = `ML returned totalCost=${predictionData.totalCost} (falsy) — ingredient prices may be 0 in the database`;
-          logger.warn(`ML returned zero/null cost for item ${item.menu_item_id}:`, predictionData);
+        if (recipe && recipe.length > 0) {
+          itemCost = recipe.reduce((total, r) => {
+            return total + (
+              r.quantity_per_base_unit *
+              (r.wastage_factor || 1.0) *
+              r.current_price_per_unit *
+              item.quantity
+            );
+          }, 0);
+          method = 'recipe_calculation';
+          logger.info(`Recipe calculation used for item ${item.menu_item_id}: cost=${itemCost}`);
         }
-      } catch (err) {
-        const status = err.response?.status;
-        const body = err.response?.data ? JSON.stringify(err.response.data) : null;
-        mlFallbackReason = status
-          ? `ML service returned HTTP ${status}: ${body || err.message}`
-          : `ML service unreachable: ${err.message}`;
-        logger.warn(`ML service failed for item ${item.menu_item_id}: ${mlFallbackReason}`);
+      } catch (recipeErr) {
+        logger.error(`Recipe calculation failed for item ${item.menu_item_id}:`, recipeErr.message);
       }
 
-      // 2. Fallback: Recipe-based calculation
-      if (!usedMl) {
+      // 2. FALLBACK: ML prediction — only when recipe data is missing or returned zero
+      if (itemCost == null || itemCost === 0) {
+        logger.warn(`No recipe data for item ${item.menu_item_id}, attempting ML prediction as fallback`);
         try {
-          const recipe = await menuRepository.getRecipe(item.menu_item_id);
+          predictionData = await mlClient.predictCost({
+            menuItemId: item.menu_item_id,
+            quantity: item.quantity,
+            eventDate: order.event_date,
+            guestCount: order.guest_count
+          });
 
-          if (recipe && recipe.length > 0) {
-            itemCost = recipe.reduce((total, r) => {
-              return total + (
-                r.quantity_per_base_unit *
-                (r.wastage_factor || 1.0) *
-                r.current_price_per_unit *
-                item.quantity
-              );
-            }, 0);
-          } else {
-            // 3. Last Resort: static markup
-            itemCost = (item.unit_price || 500) * item.quantity * 1.3;
+          if (predictionData && predictionData.totalCost) {
+            itemCost = predictionData.totalCost;
+            usedMl = true;
+            isMlPredicted = true;
+            mlCount++;
+            mlConfidenceSum += (predictionData.confidence || 0);
+            method = 'ml_prediction';
+
+            // Log ML prediction to DB for evaluation
+            await mlCostingRepository.createPrediction({
+              order_item_id: item.id,
+              ingredient_cost: predictionData.ingredientCost,
+              labor_cost: predictionData.laborCost,
+              overhead_cost: predictionData.overheadCost,
+              predicted_total: predictionData.totalCost,
+              model_version: predictionData.modelVersion,
+              prediction_confidence: predictionData.confidence
+            });
+          } else if (predictionData) {
+            mlFallbackReason = `ML returned totalCost=${predictionData.totalCost} (falsy) — ingredient prices may be 0 in the database`;
+            logger.warn(`ML returned zero/null cost for item ${item.menu_item_id}:`, predictionData);
           }
-        } catch (recipeErr) {
-          logger.error(`Recipe calculation failed for item ${item.menu_item_id}:`, recipeErr.message);
-          itemCost = (item.unit_price || 500) * item.quantity * 1.3;
+        } catch (err) {
+          const status = err.response?.status;
+          const body = err.response?.data ? JSON.stringify(err.response.data) : null;
+          mlFallbackReason = status
+            ? `ML service returned HTTP ${status}: ${body || err.message}`
+            : `ML service unreachable: ${err.message}`;
+          logger.warn(`ML fallback also failed for item ${item.menu_item_id}: ${mlFallbackReason}`);
         }
+      }
+
+      // 3. LAST RESORT: static markup (if both recipe and ML failed)
+      if (itemCost == null || itemCost === 0) {
+        itemCost = (item.unit_price || 500) * item.quantity * 1.3;
+        method = 'static_markup';
+        logger.warn(`Static markup applied for item ${item.menu_item_id}: cost=${itemCost}`);
       }
 
       subtotal += itemCost;
@@ -189,7 +195,7 @@ class OrderService {
         name: item.name,
         quantity: item.quantity,
         calculated_cost: itemCost,
-        method: usedMl ? (predictionData.method === 'ml_model' ? 'ml_prediction' : 'rule_based') : 'recipe_calculation'
+        method
       });
     }
 
@@ -226,9 +232,12 @@ class OrderService {
       order_id: orderId,
       quotation: quotation,
       item_breakdown: itemBreakdown,
+      // is_ml_predicted=true means at least one item had no recipe and ML was used as fallback.
+      // Normal (fully recipe-based) quotations will have is_ml_predicted=false.
       is_ml_predicted: isMlPredicted,
       ml_confidence: avgConfidence ? parseFloat(avgConfidence) : null,
-      ml_fallback_reason: isMlPredicted ? null : (mlFallbackReason || 'ML prediction succeeded but was not used'),
+      // ml_fallback_reason is only set when ML itself was also attempted but failed (i.e. recipe was missing AND ML failed)
+      ml_fallback_reason: mlFallbackReason || null,
       status: updatedOrder.status
     };
   }
