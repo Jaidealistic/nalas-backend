@@ -3,7 +3,7 @@ const Joi = require('joi');
 const createOrderSchema = Joi.object({
   event_date: Joi.date().min('now').required(),
   event_time: Joi.string().pattern(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).required(),
-  event_type: Joi.string().valid('Wedding', 'Conference', 'Birthday', 'Corporate', 'Family Gathering', 'Other').required(),
+  event_type: Joi.string().valid('Marriage', 'House Warming', 'Birthday Party', 'Farewell Party', 'Baby Shower', 'Corporate Events', 'House Functions', 'Get Together', 'Other').required(),
   guest_count: Joi.number().min(10).max(10000).required(),
   venue_address: Joi.string().min(10).required(),
   special_requests: Joi.string().allow(''),
@@ -19,7 +19,7 @@ const createOrderSchema = Joi.object({
 const updateOrderSchema = Joi.object({
   event_date: Joi.date(),
   event_time: Joi.string().pattern(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/),
-  event_type: Joi.string().valid('Wedding', 'Conference', 'Birthday', 'Corporate', 'Family Gathering', 'Other'),
+  event_type: Joi.string().valid('Marriage', 'House Warming', 'Birthday Party', 'Farewell Party', 'Baby Shower', 'Corporate Events', 'House Functions', 'Get Together', 'Other'),
   guest_count: Joi.number().min(10).max(10000),
   venue_address: Joi.string().min(10),
   special_requests: Joi.string().allow(''),

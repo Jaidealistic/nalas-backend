@@ -1,17 +1,33 @@
 const nodemailer = require('nodemailer');
 const logger = require('./logger');
+const settingsRepository = require('../../modules/settings/repository');
 
 class EmailClient {
-  constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+  async _getConfig() {
+    const configRow = await settingsRepository.getSetting('smtp_config');
+    const cfg = configRow?.value || {};
+
+    const host = cfg.host || process.env.SMTP_HOST;
+    const port = parseInt(cfg.port || process.env.SMTP_PORT || '587');
+    const secure = port === 465 || process.env.SMTP_SECURE === 'true';
+    const user = cfg.user || process.env.SMTP_USER;
+    const pass = cfg.pass || process.env.SMTP_PASS;
+    const fromName = cfg.from_name || 'Nalas Catering';
+    const fromEmail = user || 'noreply@nalas.com';
+
+    return {
+      transporter: nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+          user,
+          pass,
+        },
+      }),
+      from: `"${fromName}" <${fromEmail}>`,
+      host
+    };
   }
 
   /**
@@ -22,8 +38,10 @@ class EmailClient {
   async sendPasswordReset(to, token) {
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
     
+    const config = await this._getConfig();
+
     const mailOptions = {
-      from: `"Nalas Catering" <${process.env.SMTP_FROM || 'noreply@nalas.com'}>`,
+      from: config.from,
       to,
       subject: 'Password Reset Request — Nalas',
       html: `
@@ -43,14 +61,14 @@ class EmailClient {
     };
 
     try {
-      if (process.env.NODE_ENV === 'development' && !process.env.SMTP_HOST) {
+      if (process.env.NODE_ENV === 'development' && !config.host) {
         logger.info('--- DEV MODE: Password Reset Link ---');
         logger.info(`To: ${to}`);
         logger.info(`Link: ${resetUrl}`);
         return;
       }
 
-      await this.transporter.sendMail(mailOptions);
+      await config.transporter.sendMail(mailOptions);
       logger.info(`Password reset email sent to ${to}`);
     } catch (error) {
       logger.error('Failed to send password reset email:', error);
@@ -60,3 +78,4 @@ class EmailClient {
 }
 
 module.exports = new EmailClient();
+

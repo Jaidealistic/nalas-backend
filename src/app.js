@@ -63,6 +63,8 @@ app.use('/api/v1/menu', require('./modules/menu/routes'));
 app.use('/api/v1/billing', require('./modules/billing/routes'));
 app.use('/api/v1/ml-costing', require('./modules/ml-costing/routes'));
 app.use('/api/v1/dashboard', require('./modules/dashboard/routes'));
+app.use('/api/v1/settings', require('./modules/settings/routes'));
+
 
 // 404 handler
 app.use((req, res) => {

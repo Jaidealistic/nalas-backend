@@ -44,11 +44,17 @@ const querySchema = Joi.object({
   sortBy: Joi.string().default('created_at')
 });
 
+const bulkCreateIngredientSchema = Joi.array()
+  .items(createIngredientSchema)
+  .min(1)
+  .max(100)
+  .required();
+
 module.exports = {
   createIngredientSchema,
+  bulkCreateIngredientSchema,
   updateIngredientSchema,
   createTransactionSchema,
   reserveStockSchema,
-
   querySchema
 };

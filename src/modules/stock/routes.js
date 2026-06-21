@@ -5,6 +5,7 @@ const { authenticate } = require('../../middlewares/auth.middleware');
 const { requireRole } = require('../../middlewares/rbac.middleware');
 const {
   createIngredientSchema,
+  bulkCreateIngredientSchema,
   updateIngredientSchema,
   createTransactionSchema,
   reserveStockSchema,
@@ -30,6 +31,15 @@ router.post(
   requireRole('admin', 'super_admin'),
   validate(createIngredientSchema),
   stockController.createIngredient
+);
+
+// Bulk create ingredients (admin only)
+router.post(
+  '/ingredients/bulk',
+  authenticate,
+  requireRole('admin', 'super_admin'),
+  validate(bulkCreateIngredientSchema),
+  stockController.bulkCreateIngredients
 );
 
 // Get ingredient by ID

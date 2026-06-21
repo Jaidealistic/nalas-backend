@@ -20,6 +20,56 @@ class StockRepository {
     return result.rows[0];
   }
 
+  async bulkCreateIngredients(items) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+
+      // Build multi-row INSERT
+      const valuePlaceholders = items.map((_, i) => {
+        const base = i * 6;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
+      }).join(', ');
+
+      const params = items.flatMap(item => [
+        item.name,
+        item.unit,
+        item.current_price_per_unit,
+        item.reorder_level || 0,
+        item.is_perishable || false,
+        item.shelf_life_days || null
+      ]);
+
+      const insertQuery = `
+        INSERT INTO ingredients
+        (name, unit, current_price_per_unit, reorder_level, is_perishable, shelf_life_days)
+        VALUES ${valuePlaceholders}
+        RETURNING *
+      `;
+      const inserted = await client.query(insertQuery, params);
+      const ingredients = inserted.rows;
+
+      // Batch-initialize current_stock for all new ingredients
+      const stockPlaceholders = ingredients.map((_, i) => `($${i + 1}, 0, 0)`).join(', ');
+      const stockParams = ingredients.map(ing => ing.id);
+      await client.query(
+        `INSERT INTO current_stock (ingredient_id, available_quantity, reserved_quantity)
+         VALUES ${stockPlaceholders}
+         ON CONFLICT (ingredient_id) DO NOTHING`,
+        stockParams
+      );
+
+      await client.query('COMMIT');
+      return ingredients;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+
   async findIngredientById(id) {
     const query = 'SELECT * FROM ingredients WHERE id = $1';
     const result = await db.query(query, [id]);
