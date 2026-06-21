@@ -1,11 +1,19 @@
 const Joi = require('joi');
 
 const createQuotationSchema = Joi.object({
-  order_id: Joi.string().uuid().required(),
-  labor_cost_per_guest: Joi.number().min(0).default(500),
-  overhead_percentage: Joi.number().min(0).max(100).default(15),
-  tax_percentage: Joi.number().min(0).max(100).default(18),
-  discount: Joi.number().min(0).default(0)
+  order_id:                   Joi.string().uuid().required(),
+  apply_gst:                  Joi.boolean().default(false),
+  gst_percentage:             Joi.number().min(0).max(28),
+  discount:                   Joi.number().min(0).default(0),
+  ml_ingredient_cost:         Joi.number().min(0),
+  // Per-order overrides (optional — defaults come from app_settings)
+  labour_cost_per_guest:      Joi.number().min(0),
+  lpg_cost_per_guest:         Joi.number().min(0),
+  transport_flat:             Joi.number().min(0),
+  leaf_cost_per_guest:        Joi.number().min(0),
+  disposables_cost_per_guest: Joi.number().min(0),
+  overhead_percentage:        Joi.number().min(0).max(100),
+  profit_percentage:          Joi.number().min(0).max(100)
 });
 
 const createInvoiceSchema = Joi.object({
@@ -15,11 +23,12 @@ const createInvoiceSchema = Joi.object({
 });
 
 const createPaymentSchema = Joi.object({
-  invoice_id: Joi.string().uuid().required(),
+  invoice_id:     Joi.string().uuid().required(),
   payment_method: Joi.string().valid('cash', 'card', 'bank_transfer', 'check', 'upi').required(),
-  amount: Joi.number().min(0).required(),
+  payment_type:   Joi.string().valid('advance', 'partial', 'final', 'full').default('full'),
+  amount:         Joi.number().min(0).required(),
   transaction_id: Joi.string().allow(''),
-  notes: Joi.string().allow('')
+  notes:          Joi.string().max(300).allow('')
 });
 
 const updateInvoiceStatusSchema = Joi.object({

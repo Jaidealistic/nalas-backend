@@ -146,6 +146,25 @@ class BillingController {
       next(error);
     }
   }
+
+  // ===== UPI QR CODE =====
+  async getInvoiceQR(req, res, next) {
+    try {
+      const result = await billingService.getInvoiceQR(req.params.id);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getBlankQR(req, res, next) {
+    try {
+      const result = await billingService.getBlankQR();
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new BillingController();

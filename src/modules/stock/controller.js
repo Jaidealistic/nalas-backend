@@ -16,6 +16,20 @@ class StockController {
     }
   }
 
+  async bulkCreateIngredients(req, res, next) {
+    try {
+      const result = await stockService.bulkCreateIngredients(req.body);
+
+      res.status(201).json({
+        success: true,
+        message: `${result.created} ingredient(s) created successfully`,
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getIngredient(req, res, next) {
     try {
       const result = await stockService.getIngredientById(req.params.id);

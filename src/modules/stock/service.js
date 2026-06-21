@@ -25,6 +25,27 @@ class StockService {
     };
   }
 
+  async bulkCreateIngredients(items) {
+    const ingredients = await stockRepository.bulkCreateIngredients(items);
+
+    const result = ingredients.map(ing => ({
+      id: ing.id,
+      name: ing.name,
+      unit: ing.unit,
+      current_price_per_unit: ing.current_price_per_unit,
+      reorder_level: ing.reorder_level,
+      is_perishable: ing.is_perishable,
+      shelf_life_days: ing.shelf_life_days,
+      created_at: ing.created_at
+    }));
+
+    return {
+      created: result.length,
+      ingredients: result
+    };
+  }
+
+
   async getIngredientById(ingredientId) {
     const ingredient = await stockRepository.findIngredientById(ingredientId);
 

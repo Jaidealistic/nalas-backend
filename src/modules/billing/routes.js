@@ -89,4 +89,19 @@ router.post(
   billingController.processRefund
 );
 
+// ===== UPI QR CODE =====
+// Get QR pre-loaded with invoice pending amount
+router.get(
+  '/invoices/:id/qr',
+  authenticate,
+  billingController.getInvoiceQR
+);
+
+// Get blank QR (customer enters amount manually)
+router.get(
+  '/qr/blank',
+  authenticate,
+  billingController.getBlankQR
+);
+
 module.exports = router;

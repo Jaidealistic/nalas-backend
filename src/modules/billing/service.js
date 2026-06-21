@@ -3,6 +3,8 @@ const billingRepository = require('./repository');
 const orderRepository = require('../orders/repository');
 const menuRepository = require('../menu/repository');
 const stockRepository = require('../stock/repository');
+const settingsRepository = require('../settings/repository');
+const qrService = require('./qr.service');
 const logger = require('../../shared/utils/logger');
 
 class BillingService {
@@ -40,57 +42,87 @@ class BillingService {
       throw AppError.badRequest('Quotation already exists for this order');
     }
 
-    // Calculate ingredient cost
-    // If ML predicted the cost, use that directly so the billing reflects ML output.
-    // Otherwise fall back to recipe-based calculation from the database.
+    // Load config from app_settings (fallback to safe defaults)
+    const configRow = await settingsRepository.getSetting('quotation_config');
+    const cfg = configRow?.value || {};
+
+    const labourPerGuest     = data.labour_cost_per_guest    ?? cfg.labour_cost_per_guest    ?? 500;
+    const lpgPerGuest        = data.lpg_cost_per_guest       ?? cfg.lpg_cost_per_guest       ?? 30;
+    const transportFlat      = data.transport_flat           ?? cfg.transport_flat           ?? 1000;
+    const leafPerGuest       = data.leaf_cost_per_guest      ?? cfg.leaf_cost_per_guest      ?? 10;
+    const disposablesPerGuest= data.disposables_cost_per_guest ?? cfg.disposables_cost_per_guest ?? 20;
+    const overheadPct        = data.overhead_percentage      ?? cfg.overhead_percentage      ?? 10;
+    const profitPct          = data.profit_percentage        ?? cfg.profit_percentage        ?? 25;
+    const gstPct             = data.gst_percentage           ?? cfg.gst_percentage           ?? 18;
+    const applyGst           = data.apply_gst               ?? false;
+    const guestCount         = order.guest_count;
+
+    // ── Food ingredient cost ──────────────────────────────────────────────
     const ingredientCost = (data.ml_ingredient_cost != null)
       ? data.ml_ingredient_cost
       : await this.calculateIngredientCost(data.order_id);
 
-    // Calculate labour cost
-    const laborCost = order.guest_count * (data.labor_cost_per_guest || 500);
+    // ── Per-guest variable costs ──────────────────────────────────────────
+    const labourCost      = labourPerGuest      * guestCount;
+    const lpgCost         = lpgPerGuest         * guestCount;
+    const leafCost        = leafPerGuest        * guestCount;
+    const disposablesCost = disposablesPerGuest * guestCount;
 
-    // Calculate overhead cost
-    const subtotal = ingredientCost + laborCost;
-    const overheadPercentage = data.overhead_percentage || 15;
-    const overheadCost = (subtotal * overheadPercentage) / 100;
+    // ── Raw subtotal before overhead ──────────────────────────────────────
+    const rawSubtotal = ingredientCost + labourCost + lpgCost + transportFlat + leafCost + disposablesCost;
 
-    // Calculate discount
+    // ── Overhead ──────────────────────────────────────────────────────────
+    const overheadCost = (rawSubtotal * overheadPct) / 100;
+
+    // ── Subtotal after overhead ───────────────────────────────────────────
+    const subtotal = rawSubtotal + overheadCost;
+
+    // ── Profit (25% on subtotal) ──────────────────────────────────────────
+    const profitAmount = (subtotal * profitPct) / 100;
+
+    // ── Selling price (before GST) ────────────────────────────────────────
+    const sellingPrice = subtotal + profitAmount;
+
+    // ── Discount ─────────────────────────────────────────────────────────
     const discountAmount = data.discount || 0;
+    const afterDiscount  = sellingPrice - discountAmount;
 
-    // Calculate tax
-    const taxableAmount = subtotal + overheadCost - discountAmount;
-    const taxPercentage = data.tax_percentage || 18;
-    const taxAmount = (taxableAmount * taxPercentage) / 100;
-
-    // Calculate grand total
-    const grandTotal = taxableAmount + taxAmount;
+    // ── GST ───────────────────────────────────────────────────────────────
+    const taxAmount  = applyGst ? (afterDiscount * gstPct) / 100 : 0;
+    const grandTotal = afterDiscount + taxAmount;
 
     const quotation = await billingRepository.createQuotation({
-      order_id: data.order_id,
-      subtotal,
-      labor_cost: laborCost,
+      order_id:      data.order_id,
+      subtotal:      sellingPrice,        // selling price before GST stored as subtotal
+      labor_cost:    labourCost,
       overhead_cost: overheadCost,
-      discount: discountAmount,
-      tax_amount: taxAmount,
-      grand_total: grandTotal
+      discount:      discountAmount,
+      tax_amount:    taxAmount,
+      grand_total:   grandTotal
     });
 
     return {
-      id: quotation.id,
-      order_id: quotation.order_id,
+      id:               quotation.id,
+      order_id:         quotation.order_id,
       quotation_number: quotation.quotation_number,
       breakdown: {
-        ingredient_cost: ingredientCost,
-        labor_cost: laborCost,
-        subtotal,
-        overhead_cost: overheadCost,
-        discount: discountAmount,
-        tax_amount: taxAmount
+        ingredient_cost:   ingredientCost,
+        labour_cost:       labourCost,
+        lpg_cost:          lpgCost,
+        transport_cost:    transportFlat,
+        leaf_cost:         leafCost,
+        disposables_cost:  disposablesCost,
+        overhead_cost:     overheadCost,
+        profit_amount:     profitAmount,
+        selling_price:     sellingPrice,
+        discount:          discountAmount,
+        gst_applied:       applyGst,
+        gst_percentage:    applyGst ? gstPct : 0,
+        tax_amount:        taxAmount
       },
-      grand_total: grandTotal,
-      valid_until: quotation.valid_until,
-      created_at: quotation.created_at
+      grand_total:  grandTotal,
+      valid_until:  quotation.valid_until,
+      created_at:   quotation.created_at
     };
   }
 
@@ -317,6 +349,56 @@ class BillingService {
       invoice_status: updatedInvoice.payment_status,
       remaining_paid: Number(totalPaid),
       refunded_at: refund.payment_date
+    };
+  }
+
+  // ===== UPI QR CODE =====
+  async getInvoiceQR(invoiceId) {
+    const invoice = await billingRepository.findInvoiceById(invoiceId);
+    if (!invoice) throw AppError.notFound('Invoice');
+
+    const businessRow = await settingsRepository.getSetting('business_info');
+    const biz = businessRow?.value || {};
+
+    if (!biz.upi_id) {
+      throw AppError.badRequest('UPI ID not configured. Please set it in Settings → Business Info.');
+    }
+
+    const pendingAmount = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+    const qrBase64 = await qrService.generateUPIQR({
+      upiId:      biz.upi_id,
+      payeeName:  biz.upi_payee_name || biz.business_name || 'Magilam Foods',
+      amount:     pendingAmount,
+      note:       invoice.invoice_number
+    });
+
+    return {
+      invoice_id:     invoiceId,
+      invoice_number: invoice.invoice_number,
+      amount:         pendingAmount,
+      upi_id:         biz.upi_id,
+      qr_base64:      qrBase64,
+      qr_data_url:    `data:image/png;base64,${qrBase64}`
+    };
+  }
+
+  async getBlankQR() {
+    const businessRow = await settingsRepository.getSetting('business_info');
+    const biz = businessRow?.value || {};
+
+    if (!biz.upi_id) {
+      throw AppError.badRequest('UPI ID not configured. Please set it in Settings → Business Info.');
+    }
+
+    const qrBase64 = await qrService.generateBlankUPIQR({
+      upiId:     biz.upi_id,
+      payeeName: biz.upi_payee_name || biz.business_name || 'Magilam Foods'
+    });
+
+    return {
+      upi_id:      biz.upi_id,
+      qr_base64:   qrBase64,
+      qr_data_url: `data:image/png;base64,${qrBase64}`
     };
   }
 }
