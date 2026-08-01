@@ -243,11 +243,15 @@ class OrderService {
   }
 
   // ===== ORDER CONFIRMATION (Order → Stock → Billing integration) =====
-  async confirmOrder(orderId, userId) {
+  async confirmOrder(orderId, userId, user = null) {
     const order = await orderRepository.findOrderById(orderId);
 
     if (!order) {
       throw AppError.notFound('Order');
+    }
+
+    if (user && user.role === 'customer' && order.customer_id !== user.id) {
+      throw AppError.forbidden('You do not have permission to confirm this order');
     }
 
     if (order.status !== 'quoted') {
@@ -402,6 +406,25 @@ class OrderService {
       // Table may not exist yet; don't fail the request
     }
 
+    // Fetch invoice if exists (non-critical)
+    let invoice = null;
+    try {
+      const billingRepository = require('../billing/repository');
+      const inv = await billingRepository.findInvoiceByOrderId(orderId);
+      if (inv) {
+        invoice = {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          total_amount: inv.total_amount,
+          paid_amount: inv.paid_amount || 0,
+          payment_status: inv.payment_status,
+          due_date: inv.due_date
+        };
+      }
+    } catch (err) {
+      // Ignore if billing repository fails
+    }
+
     return {
       id: order.id,
       customer_id: order.customer_id,
@@ -413,6 +436,7 @@ class OrderService {
       status: order.status,
       total_amount: order.total_amount,
       advance_paid: order.advance_paid,
+      invoice,
       items,
       status_history: statusHistory,
       created_at: order.created_at,

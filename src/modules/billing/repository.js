@@ -101,6 +101,12 @@ class BillingRepository {
     return result.rows[0] || null;
   }
 
+  async findInvoiceByOrderId(orderId) {
+    const query = 'SELECT * FROM invoices WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1';
+    const result = await db.query(query, [orderId]);
+    return result.rows[0] || null;
+  }
+
   async findAllInvoices(filters = {}, limit = 10, offset = 0) {
     let query = 'SELECT * FROM invoices WHERE 1=1';
     const params = [];

@@ -60,11 +60,11 @@ router.post(
   orderController.generateQuotation
 );
 
-// Confirm an order (admin only) — reserves stock + creates invoice
+// Confirm an order — reserves stock + creates invoice
 router.post(
   '/:id/confirm',
   authenticate,
-  requireRole('admin', 'super_admin'),
+  requireRole('admin', 'super_admin', 'customer'),
   orderController.confirmOrder
 );
 
