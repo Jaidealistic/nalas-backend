@@ -107,7 +107,8 @@ class OrderController {
     try {
       const result = await orderService.confirmOrder(
         req.params.id,
-        req.user?.id || null
+        req.user?.id || null,
+        req.user
       );
 
       res.json({
